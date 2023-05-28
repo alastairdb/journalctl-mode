@@ -212,17 +212,29 @@
  "Run journalctl with give OPT and present CHUNK of  output in a special buffer.
 If OPT is t the options in 'journalctl-current-opts' are taken."
   (interactive)
-  (unless (eq opt t)
-  (let ((opt (or opt (read-string "option: " "-x  -n 1000" nil "-x "))))
-    (journalctl-parse-options opt)))
-    (let ((opt (journalctl-unparse-options)))
-    (setq journalctl-current-lines (string-to-number (shell-command-to-string (concat "journalctl " opt "|  wc -l"))))
+  (let ((opt
+         (cond ((eq opt t)
+                t)
+               ((listp opt) 
+                (progn (setq journalctl-current-chunk 0
+                             journalctl-current-opts opt)
+                       0))
+               ((stringp opt)
+                (progn 
+                  (setq journalctl-current-chunk 0
+                        journalctl-current-opts opt)
+                  (journalctl-parse-options opt)))
+               (t
+                (journalctl-parse-options (read-string "option: " "-x  -n 1000" nil "-x "))))))
+    (setq opt (journalctl-unparse-options))
+    (setq journalctl-current-lines
+          (string-to-number (shell-command-to-string (concat "journalctl " opt "|  wc -l"))))
     (let* ((this-chunk (or chunk  0)) ;; if chunk is not explicit given, we assume this first (0) chunk
-	         (first-line (+ 1 (* this-chunk journalctl-chunk-size)))
-	         (last-line (if (<= (+ first-line journalctl-chunk-size)
+	   (first-line (+ 1 (* this-chunk journalctl-chunk-size)))
+	   (last-line (if (<= (+ first-line journalctl-chunk-size)
                               journalctl-current-lines)
-			                    (+ first-line journalctl-chunk-size)
-		                    journalctl-current-lines)))
+			  (+ first-line journalctl-chunk-size)
+		        journalctl-current-lines)))
       (with-current-buffer (get-buffer-create "*journalctl*")
         (setq buffer-read-only nil)
         (fundamental-mode)
@@ -235,6 +247,7 @@ If OPT is t the options in 'journalctl-current-opts' are taken."
       (switch-to-buffer "*journalctl*")
       (setq buffer-read-only t)
 ;;      (setq journalctl-current-opts opt)
+      (message "Opts: %s Filter:%s" opt journalctl-current-filter)
       (journalctl-mode))))
 
 
@@ -378,7 +391,7 @@ If OPT is set, remove this option."
 	 (opt (or opt (completing-read "option: " opt-list  nil t))))
     (when  (member opt opt-list)
       (setq journalctl-current-opts (delq (assoc opt journalctl-current-opts) journalctl-current-opts))))
-    (journalctl t journalctl-current-chunk))
+  (journalctl t journalctl-current-chunk))
 
 (defun journalctl-grep (&optional pattern)
   "Run journalctl with -grep flag to search for PATTERN."
